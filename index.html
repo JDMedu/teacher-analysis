@@ -155,6 +155,147 @@
             font-size: 0.8em;
             font-weight: bold;
         }
+
+/* 학생별 약점 그리드 */
+.student-weakness-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.student-weakness-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border-left: 5px solid #3b82f6;
+}
+
+.student-weakness-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.student-weakness-card.priority-high {
+    border-left-color: #ef4444;
+    background: linear-gradient(135deg, #fff 0%, #fee2e2 100%);
+}
+
+.student-weakness-card.priority-medium {
+    border-left-color: #f59e0b;
+    background: linear-gradient(135deg, #fff 0%, #fef3c7 100%);
+}
+
+.student-weakness-card.priority-low {
+    border-left-color: #84cc16;
+    background: linear-gradient(135deg, #fff 0%, #ecfccb 100%);
+}
+
+.student-weakness-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid rgba(0,0,0,0.1);
+}
+
+.student-weakness-name {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.student-weakness-number {
+    font-size: 0.95em;
+    color: #6b7280;
+    background: rgba(0,0,0,0.05);
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.student-weakness-subject {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #3b82f6;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.student-weakness-subject-icon {
+    font-size: 1.3em;
+}
+
+.student-weakness-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.student-weakness-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.95em;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 8px;
+}
+
+.student-weakness-label {
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.student-weakness-value {
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.student-weakness-value.low {
+    color: #ef4444;
+}
+
+.student-weakness-reason {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 8px;
+    font-size: 0.9em;
+    color: #1e40af;
+    font-weight: 500;
+    text-align: center;
+}
+
+.priority-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.priority-badge.high {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.priority-badge.medium {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.priority-badge.low {
+    background: #ecfccb;
+    color: #365314;
+}
         
         /* 통계 대시보드 */
         .stats-dashboard {
@@ -316,9 +457,97 @@ function processFile(file) {
     reader.readAsArrayBuffer(file);
 }
 
-// 학생 데이터 파싱 함수
+// ===== 시험별 과목별 통계 계산 함수 =====
+function calculateTestStatistics(workbook, recentTests) {
+    var testStats = {};
+    
+    recentTests.forEach(function(testName) {
+        var sheet = workbook.Sheets[testName];
+        if (!sheet) return;
+        
+        var data = XLSX.utils.sheet_to_json(sheet, {header: 1});
+        if (data.length < 2) return;
+        
+        var headers = data[0];
+        testStats[testName] = {};
+        
+        console.log('\n📊 ' + testName + ' 통계 계산 중...');
+        
+        // 과목별 통계 계산 (선택과목별로)
+        var 언어와매체Scores = {};
+        var 화법과작문Scores = {};
+        
+        // 점수 수집
+        for (var i = 1; i < data.length; i++) {
+            var row = data[i];
+            if (!row || !row[2]) continue;
+            
+            var subjectType = String(row[2]).trim();
+            var track = getTrack(subjectType);
+            
+            for (var col = 5; col < headers.length; col++) {
+                var subjectName = normalizeHeader(headers[col]);
+                var score = parseFloat(row[col]) || 0;
+                
+                if (score > 0) {
+                    if (track === '언어와매체') {
+                        if (!언어와매체Scores[subjectName]) 언어와매체Scores[subjectName] = [];
+                        언어와매체Scores[subjectName].push(score);
+                    } else {
+                        if (!화법과작문Scores[subjectName]) 화법과작문Scores[subjectName] = [];
+                        화법과작문Scores[subjectName].push(score);
+                    }
+                }
+            }
+        }
+        
+        // 통계 계산
+        testStats[testName] = {
+            '언어와매체': {},
+            '화법과작문': {}
+        };
+        
+        // 언어와매체 통계
+        for (var subject in 언어와매체Scores) {
+            var scores = 언어와매체Scores[subject];
+            if (scores.length === 0) continue;
+            
+            var mean = scores.reduce((a, b) => a + b) / scores.length;
+            var variance = scores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / scores.length;
+            var stdDev = Math.sqrt(variance);
+            
+            testStats[testName]['언어와매체'][subject] = {
+                mean: mean,
+                stdDev: stdDev,
+                count: scores.length
+            };
+        }
+        
+        // 화법과작문 통계
+        for (var subject in 화법과작문Scores) {
+            var scores = 화법과작문Scores[subject];
+            if (scores.length === 0) continue;
+            
+            var mean = scores.reduce((a, b) => a + b) / scores.length;
+            var variance = scores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / scores.length;
+            var stdDev = Math.sqrt(variance);
+            
+            testStats[testName]['화법과작문'][subject] = {
+                mean: mean,
+                stdDev: stdDev,
+                count: scores.length
+            };
+            
+            console.log('  ' + subject + ' (화작): 평균=' + Math.round(mean) + ', 표준편차=' + Math.round(stdDev));
+        }
+    });
+    
+    return testStats;
+}
+
+// ===== 학생 데이터 파싱 함수 (하이브리드 방식) =====
 function parseStudentData(workbook) {
-    console.log('=== 학생 데이터 파싱 시작 ===');
+    console.log('=== 학생 데이터 파싱 시작 (하이브리드 방식) ===');
     
     studentData = {};
     
@@ -339,8 +568,10 @@ function parseStudentData(workbook) {
             studentData[attendanceNumber] = {
                 name: name,
                 attendanceNumber: attendanceNumber,
-                testScores: {},
-                subjectAverages: {}
+                testScores: {},      // 원점수 저장
+                testRatios: {},      // 성취도(%) 저장
+                subjectAverages: {}, // 성취도 평균
+                subjectZScores: {}   // Z-Score 평균
             };
         }
     }
@@ -365,6 +596,10 @@ function parseStudentData(workbook) {
     var recentTests = testSheets.slice(-10);
     console.log('최근 10회 시험:', recentTests);
     
+    // ⭐ 통계 계산 ⭐
+    var testStats = calculateTestStatistics(workbook, recentTests);
+    window.testStats = testStats;
+    
     // ⭐ 각 시험 처리 ⭐
     recentTests.forEach(function(testName) {
         console.log('\n처리 중:', testName);
@@ -376,58 +611,52 @@ function parseStudentData(workbook) {
         
         var headers = data[0];
         
-        // ⭐ 2274 이대건과 2284 오진형의 데이터 찾기 ⭐
-        var 이대건Row = null;
-        var 오진형Row = null;
+        // 만점 학생 찾기
+        var 언어와매체최고Row = null;
+        var 화법과작문최고Row = null;
+        var 언어와매체최고점 = 0;
+        var 화법과작문최고점 = 0;
         
         for (var i = 1; i < data.length; i++) {
             var row = data[i];
-            if (!row || !row[1]) continue;
+            if (!row || !row[1] || !row[2] || !row[4]) continue;
             
-            var attendanceNumber = String(row[1]);
+            var subjectType = String(row[2]).trim();
+            var totalScore = parseFloat(row[4]) || 0;
             
-            if (attendanceNumber === '2274') {
-                이대건Row = row;
-                console.log('✅ 이대건 발견 (언어와매체 만점)');
+            if (subjectType.includes('언어') || subjectType.includes('매체')) {
+                if (totalScore > 언어와매체최고점) {
+                    언어와매체최고Row = row;
+                    언어와매체최고점 = totalScore;
+                }
             }
-            if (attendanceNumber === '2284') {
-                오진형Row = row;
-                console.log('✅ 오진형 발견 (화법과작문 만점)');
+            
+            if (subjectType.includes('화법') || subjectType.includes('작문')) {
+                if (totalScore > 화법과작문최고점) {
+                    화법과작문최고Row = row;
+                    화법과작문최고점 = totalScore;
+                }
             }
         }
         
-        if (!이대건Row || !오진형Row) {
-            console.warn('⚠️ 만점 학생 데이터 부족:', testName);
+        if (!언어와매체최고Row || !화법과작문최고Row) {
+            console.warn('⚠️ 만점 학생 부족:', testName);
             return;
         }
         
-        // ⭐ 만점 데이터 저장 ⭐
+        // 만점 데이터 저장
         var maxScores = {
             '언어와매체': {},
             '화법과작문': {}
         };
         
-        // 이대건 = 언어와매체 만점
         for (var col = 5; col < headers.length; col++) {
             var subjectName = normalizeHeader(headers[col]);
-            var score = parseFloat(이대건Row[col]) || 0;
-            if (score > 0) {
-                maxScores['언어와매체'][subjectName] = score;
-            }
+            maxScores['언어와매체'][subjectName] = parseFloat(언어와매체최고Row[col]) || 0;
+            maxScores['화법과작문'][subjectName] = parseFloat(화법과작문최고Row[col]) || 0;
         }
         
-        // 오진형 = 화법과작문 만점
-        for (var col = 5; col < headers.length; col++) {
-            var subjectName = normalizeHeader(headers[col]);
-            var score = parseFloat(오진형Row[col]) || 0;
-            if (score > 0) {
-                maxScores['화법과작문'][subjectName] = score;
-            }
-        }
-        
-        console.log(testName + ' 만점 기준:', maxScores);
-        
-        // ⭐ 각 학생의 성취도(%) 계산 ⭐
+        // ⭐ 각 학생의 원점수 및 성취도, Z-Score 계산 ⭐
         for (var i = 1; i < data.length; i++) {
             var row = data[i];
             if (!row || !row[0] || !row[1]) continue;
@@ -438,12 +667,13 @@ function parseStudentData(workbook) {
             
             if (!studentData[attendanceNumber]) continue;
             
-            // 선택과목에 맞는 만점 선택
             var track = getTrack(subjectType);
             var maxScoreData = maxScores[track];
+            var statsData = testStats[testName][track];
             
-            // 과목별 성취도(%) 계산
-            var subjectRatios = {};
+            var subjectScores = {};   // 원점수
+            var subjectRatios = {};   // 성취도(%)
+            var subjectZScores = {};  // Z-Score
             
             for (var col = 5; col < headers.length; col++) {
                 var subjectName = normalizeHeader(headers[col]);
@@ -451,47 +681,58 @@ function parseStudentData(workbook) {
                 var maxScore = maxScoreData[subjectName] || 0;
                 
                 if (maxScore > 0 && studentScore >= 0) {
+                    // 원점수 저장
+                    subjectScores[subjectName] = studentScore;
+                    
+                    // 성취도(%) 계산
                     var ratio = Math.round((studentScore / maxScore) * 100);
                     subjectRatios[subjectName] = ratio;
                     
-                    // 첫 번째 학생만 로그
-                    if (i === 1) {
-                        console.log(name + ' - ' + subjectName + ':', studentScore + '/' + maxScore + ' = ' + ratio + '%');
+                    // Z-Score 계산
+                    if (statsData && statsData[subjectName]) {
+                        var stats = statsData[subjectName];
+                        var zScore = stats.stdDev > 0 ? (studentScore - stats.mean) / stats.stdDev : 0;
+                        subjectZScores[subjectName] = zScore;
                     }
                 }
             }
             
-            studentData[attendanceNumber].testScores[testName] = subjectRatios;
+            studentData[attendanceNumber].testScores[testName] = subjectScores;
+            studentData[attendanceNumber].testRatios[testName] = subjectRatios;
+            
+            // Z-Score 저장
+            for (var subject in subjectZScores) {
+                if (!studentData[attendanceNumber].subjectZScores[subject]) {
+                    studentData[attendanceNumber].subjectZScores[subject] = [];
+                }
+                studentData[attendanceNumber].subjectZScores[subject].push(subjectZScores[subject]);
+            }
         }
     });
     
-    // ⭐ 각 학생의 과목별 평균 성취도(%) 계산 ⭐
+    // ⭐ 각 학생의 과목별 평균 계산 ⭐
     for (var attendanceNumber in studentData) {
         var student = studentData[attendanceNumber];
-        var subjectTotals = {};
-        var subjectCounts = {};
+        var subjectRatioTotals = {};
+        var subjectRatioCounts = {};
         
-        for (var testName in student.testScores) {
-            var testScores = student.testScores[testName];
+        // 성취도 평균 계산
+        for (var testName in student.testRatios) {
+            var testRatios = student.testRatios[testName];
             
-            for (var subject in testScores) {
-                if (!subjectTotals[subject]) {
-                    subjectTotals[subject] = 0;
-                    subjectCounts[subject] = 0;
+            for (var subject in testRatios) {
+                if (!subjectRatioTotals[subject]) {
+                    subjectRatioTotals[subject] = 0;
+                    subjectRatioCounts[subject] = 0;
                 }
                 
-                subjectTotals[subject] += testScores[subject];
-                subjectCounts[subject]++;
+                subjectRatioTotals[subject] += testRatios[subject];
+                subjectRatioCounts[subject]++;
             }
         }
         
-        for (var subject in subjectTotals) {
-            student.subjectAverages[subject] = Math.round((subjectTotals[subject] / subjectCounts[subject]) * 10) / 10;
-        }
-        
-        // 첫 번째 학생만 로그
-        if (attendanceNumber === Object.keys(studentData)[0]) {
-            console.log('📊 ' + student.name + ' 과목별 평균 성취도:', student.subjectAverages);
+        for (var subject in subjectRatioTotals) {
+            student.subjectAverages[subject] = Math.round((subjectRatioTotals[subject] / subjectRatioCounts[subject]) * 10) / 10;
         }
     }
     
@@ -510,11 +751,12 @@ function normalizeHeader(h) {
     return String(h == null ? '' : h).replace(/\s/g, '').trim();
 }
 
-       // 약점 분석 함수
+
+      // ===== 약점 분석 함수 (하이브리드 방식) =====
 function analyzeWeaknesses() {
     weaknessAnalysis = {};
     
-    console.log('=== 약점 분석 시작 ===');
+    console.log('=== 약점 분석 시작 (하이브리드 방식) ===');
     
     // 과목 목록 정의
     var subjects = [
@@ -534,13 +776,6 @@ function analyzeWeaknesses() {
         weaknessAnalysis[subject] = [];
     });
     
-    // ⭐ 첫 번째 학생의 과목 목록 출력 ⭐
-    var firstStudentKey = Object.keys(studentData)[0];
-    if (firstStudentKey) {
-        var firstStudent = studentData[firstStudentKey];
-        console.log('첫 번째 학생 과목 목록:', Object.keys(firstStudent.subjectAverages));
-    }
-    
     // 각 학생 분석
     for (var attendanceNumber in studentData) {
         var student = studentData[attendanceNumber];
@@ -548,7 +783,7 @@ function analyzeWeaknesses() {
         // 과목별 평균이 없으면 스킵
         if (Object.keys(student.subjectAverages).length === 0) continue;
         
-        // 학생의 전체 평균 계산
+        // 학생의 전체 평균 성취도 계산
         var totalSum = 0;
         var totalCount = 0;
         
@@ -559,14 +794,61 @@ function analyzeWeaknesses() {
         
         var studentAverage = totalSum / totalCount;
         
-        // 각 과목이 평균보다 낮은지 확인
+        // 학생의 전체 평균 Z-Score 계산
+        var totalZScores = [];
+        for (var subject in student.subjectZScores) {
+            var zScores = student.subjectZScores[subject];
+            var avgZ = zScores.reduce((a, b) => a + b) / zScores.length;
+            totalZScores.push(avgZ);
+        }
+        var studentAvgZ = totalZScores.length > 0 ? totalZScores.reduce((a, b) => a + b) / totalZScores.length : 0;
+        
+        // 각 과목 분석
         for (var actualSubject in student.subjectAverages) {
-            var subjectAverage = student.subjectAverages[actualSubject];
+            var subjectAverage = student.subjectAverages[actualSubject];  // 성취도(%)
             var difference = studentAverage - subjectAverage;
             
-            // 본인 평균보다 10% 이상 낮으면 약점으로 판정
-            if (difference >= 10) {
-                // 과목명 매칭
+            // Z-Score 계산
+            var avgZScore = 0;
+            var zDifference = 0;
+            
+            if (student.subjectZScores[actualSubject]) {
+                var zScores = student.subjectZScores[actualSubject];
+                avgZScore = zScores.reduce((a, b) => a + b) / zScores.length;
+                zDifference = studentAvgZ - avgZScore;
+            }
+            
+            // ⭐ 하이브리드 약점 판정 ⭐
+            var isWeak = false;
+            var priority = 'low';
+            var reason = '';
+            
+            // 1순위: 절대적으로 낮음 (성취도 70% 미만)
+            if (subjectAverage < 70) {
+                isWeak = true;
+                priority = 'high';
+                reason = '절대적 약점 (70% 미만)';
+            }
+            // 2순위: Z-Score로 심각하게 낮음 (평균보다 1 표준편차 이상 낮음)
+            else if (avgZScore < -1.0) {
+                isWeak = true;
+                priority = 'high';
+                reason = '전체 대비 심각 (평균 -1σ 이하)';
+            }
+            // 3순위: 본인 대비 상대적으로 낮음 (본인 평균보다 10% 이상)
+            else if (difference >= 10) {
+                isWeak = true;
+                priority = 'medium';
+                reason = '본인 대비 약점 (평균 -10%)';
+            }
+            // 4순위: 본인 내에서 Z-Score가 낮음
+            else if (zDifference > 0.5) {
+                isWeak = true;
+                priority = 'medium';
+                reason = '본인 내 상대적 약점';
+            }
+            
+            if (isWeak) {
                 var matchedSubject = findMatchingSubjectAdvanced(actualSubject, subjects);
                 
                 if (matchedSubject && weaknessAnalysis[matchedSubject]) {
@@ -575,16 +857,25 @@ function analyzeWeaknesses() {
                         attendanceNumber: attendanceNumber,
                         subjectAverage: Math.round(subjectAverage * 10) / 10,
                         studentAverage: Math.round(studentAverage * 10) / 10,
-                        difference: Math.round(difference * 10) / 10
+                        difference: Math.round(difference * 10) / 10,
+                        avgZScore: Math.round(avgZScore * 100) / 100,
+                        priority: priority,
+                        reason: reason
                     });
                 }
             }
         }
     }
     
-    // 각 과목별로 차이가 큰 순서대로 정렬
+    // 각 과목별로 우선순위 → 차이 큰 순서대로 정렬
     for (var subject in weaknessAnalysis) {
         weaknessAnalysis[subject].sort(function(a, b) {
+            // 우선순위 정렬
+            if (a.priority !== b.priority) {
+                var priorityOrder = {'high': 0, 'medium': 1, 'low': 2};
+                return priorityOrder[a.priority] - priorityOrder[b.priority];
+            }
+            // 같은 우선순위면 차이 큰 순
             return b.difference - a.difference;
         });
     }
@@ -592,16 +883,17 @@ function analyzeWeaknesses() {
     console.log('=== 과목별 약점 학생 수 ===');
     for (var subject in weaknessAnalysis) {
         if (weaknessAnalysis[subject].length > 0) {
-            console.log(subject + ':', weaknessAnalysis[subject].length + '명');
+            var highCount = weaknessAnalysis[subject].filter(s => s.priority === 'high').length;
+            var mediumCount = weaknessAnalysis[subject].filter(s => s.priority === 'medium').length;
+            console.log(subject + ':', weaknessAnalysis[subject].length + '명 (🔴' + highCount + ' 🟡' + mediumCount + ')');
         }
     }
     
-    console.log('약점 분석 완료:', weaknessAnalysis);
+    console.log('약점 분석 완료 (하이브리드):', weaknessAnalysis);
 }
 
-// ⭐ 기존 코드의 고급 매칭 로직 ⭐
+// 과목명 매칭 함수
 function findMatchingSubjectAdvanced(actualSubject, standardSubjects) {
-    // 과목명 매핑 (기존 코드에서 가져옴)
     var subjectMapping = {
         '독서(인문,독서론)': ['독서(인문,독서론)', '독서(인문 이론)', '독서(인문이론)', '독서인문', '인문'],
         '독서(사회)': ['독서(사회)', '독서사회', '사회'],
@@ -610,11 +902,11 @@ function findMatchingSubjectAdvanced(actualSubject, standardSubjects) {
         '문학(현대소설)': ['문학(현대소설)', '문학현대소설', '현대소설', '현소'],
         '문학(고전시가)': ['문학(고전시가)', '문학고전시가', '고전시가', '고시'],
         '문학(고전소설)': ['문학(고전소설)', '문학고전소설', '고전소설', '고소'],
-        '언어 화법': ['언어 화법', '언어화법', '화법', '언어'],  // ⭐ 수정
-        '매체 작문': ['매체 작문', '매체작문', '작문', '매체']   // ⭐ 수정
+        '언어 화법': ['언어 화법', '언어화법', '화법', '언어'],
+        '매체 작문': ['매체 작문', '매체작문', '작문', '매체']
     };
     
-    // 1. 정확히 일치하는 과목 찾기
+    // 1. 정확 일치
     for (var standardSubject in subjectMapping) {
         var possibleNames = subjectMapping[standardSubject];
         
@@ -625,7 +917,7 @@ function findMatchingSubjectAdvanced(actualSubject, standardSubjects) {
         }
     }
     
-    // 2. 부분 일치하는 과목 찾기
+    // 2. 부분 일치
     for (var standardSubject in subjectMapping) {
         var possibleNames = subjectMapping[standardSubject];
         
@@ -636,7 +928,6 @@ function findMatchingSubjectAdvanced(actualSubject, standardSubjects) {
         }
     }
     
-    console.log('⚠️ 매칭 실패:', actualSubject);
     return null;
 }
 
@@ -649,7 +940,248 @@ function displayResults() {
     
     // 2. 과목별 약점 학생 목록 표시
     displaySubjectAnalysis();
+
+// ===== 학생별 최대 약점 분석 =====
+function analyzeStudentMaxWeakness() {
+    var studentMaxWeakness = [];
+    
+    console.log('=== 학생별 최대 약점 분석 시작 ===');
+    
+    // 각 학생별로 가장 약한 과목 찾기
+    for (var attendanceNumber in studentData) {
+        var student = studentData[attendanceNumber];
+        
+        if (Object.keys(student.subjectAverages).length === 0) continue;
+        
+        // 학생의 전체 평균
+        var totalSum = 0;
+        var totalCount = 0;
+        
+        for (var subject in student.subjectAverages) {
+            totalSum += student.subjectAverages[subject];
+            totalCount++;
+        }
+        
+        var studentAverage = totalSum / totalCount;
+        
+        // 학생의 전체 평균 Z-Score
+        var totalZScores = [];
+        for (var subject in student.subjectZScores) {
+            var zScores = student.subjectZScores[subject];
+            var avgZ = zScores.reduce((a, b) => a + b) / zScores.length;
+            totalZScores.push(avgZ);
+        }
+        var studentAvgZ = totalZScores.length > 0 ? totalZScores.reduce((a, b) => a + b) / totalZScores.length : 0;
+        
+        // 모든 과목의 약점 점수 계산
+        var weaknessScores = [];
+        
+        for (var actualSubject in student.subjectAverages) {
+            var subjectAverage = student.subjectAverages[actualSubject];
+            var difference = studentAverage - subjectAverage;
+            
+            // Z-Score 계산
+            var avgZScore = 0;
+            var zDifference = 0;
+            
+            if (student.subjectZScores[actualSubject]) {
+                var zScores = student.subjectZScores[actualSubject];
+                avgZScore = zScores.reduce((a, b) => a + b) / zScores.length;
+                zDifference = studentAvgZ - avgZScore;
+            }
+            
+            // 약점 판정
+            var priority = 'low';
+            var reason = '';
+            var weaknessScore = 0;  // 약점 정도 (높을수록 심각)
+            
+            if (subjectAverage < 70) {
+                priority = 'high';
+                reason = '절대적 약점 (70% 미만)';
+                weaknessScore = 100 - subjectAverage + difference;
+            } else if (avgZScore < -1.0) {
+                priority = 'high';
+                reason = '전체 대비 심각 (평균 -1σ 이하)';
+                weaknessScore = 50 + Math.abs(avgZScore) * 10 + difference;
+            } else if (difference >= 10) {
+                priority = 'medium';
+                reason = '본인 대비 약점 (평균 -10%)';
+                weaknessScore = difference;
+            } else if (zDifference > 0.5) {
+                priority = 'medium';
+                reason = '본인 내 상대적 약점';
+                weaknessScore = zDifference * 10;
+            }
+            
+            weaknessScores.push({
+                subject: actualSubject,
+                subjectAverage: subjectAverage,
+                difference: difference,
+                avgZScore: avgZScore,
+                priority: priority,
+                reason: reason,
+                weaknessScore: weaknessScore
+            });
+        }
+        
+        // 가장 약한 과목 찾기 (weaknessScore가 가장 높은 것)
+        if (weaknessScores.length > 0) {
+            weaknessScores.sort((a, b) => b.weaknessScore - a.weaknessScore);
+            var maxWeakness = weaknessScores[0];
+            
+            // 약점이 있는 경우만 추가 (최소 조건: 본인 평균보다 5% 이상 낮거나 Z-Score < -0.5)
+            if (maxWeakness.difference >= 5 || maxWeakness.avgZScore < -0.5) {
+                studentMaxWeakness.push({
+                    name: student.name,
+                    attendanceNumber: attendanceNumber,
+                    subject: maxWeakness.subject,
+                    subjectAverage: Math.round(maxWeakness.subjectAverage * 10) / 10,
+                    studentAverage: Math.round(studentAverage * 10) / 10,
+                    difference: Math.round(maxWeakness.difference * 10) / 10,
+                    avgZScore: Math.round(maxWeakness.avgZScore * 100) / 100,
+                    priority: maxWeakness.priority,
+                    reason: maxWeakness.reason
+                });
+            }
+        }
+    }
+    
+    // 우선순위별로 정렬
+    studentMaxWeakness.sort(function(a, b) {
+        var priorityOrder = {'high': 0, 'medium': 1, 'low': 2};
+        
+        if (a.priority !== b.priority) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+        
+        return b.difference - a.difference;
+    });
+    
+    console.log('=== 학생별 최대 약점 분석 완료 ===');
+    console.log('총 학생 수:', studentMaxWeakness.length);
+    
+    return studentMaxWeakness;
 }
+
+// ===== 학생별 약점 표시 =====
+function displayStudentWeakness() {
+    var studentMaxWeakness = analyzeStudentMaxWeakness();
+    var container = document.getElementById('studentWeaknessGrid');
+    
+    if (studentMaxWeakness.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280;">약점이 발견된 학생이 없습니다.</div>';
+        return;
+    }
+    
+    var html = '';
+    
+    // 과목별 아이콘 매핑
+    var subjectIcons = {
+        '독서(인문,독서론)': '📖',
+        '독서(사회)': '🏛️',
+        '독서(과학)': '🔬',
+        '문학(현대시)': '✍️',
+        '문학(현대소설)': '📚',
+        '문학(고전시가)': '🎭',
+        '문학(고전소설)': '📜',
+        '언어 화법': '💬',
+        '매체 작문': '📱'
+    };
+    
+    studentMaxWeakness.forEach(function(student) {
+        // 표준 과목명 찾기
+        var subjects = Object.keys(subjectIcons);
+        var matchedSubject = findMatchingSubjectAdvanced(student.subject, subjects);
+        var displaySubject = matchedSubject || student.subject;
+        var icon = subjectIcons[displaySubject] || '📝';
+        
+        var priorityIcon = student.priority === 'high' ? '🔴' : 
+                          student.priority === 'medium' ? '🟡' : '🟢';
+        
+        html += '<div class="student-weakness-card priority-' + student.priority + '" onclick="showStudentDetail(\'' + student.attendanceNumber + '\')">';
+        
+        // 헤더
+        html += '<div class="student-weakness-header">';
+        html += '<div class="student-weakness-name">' + priorityIcon + ' ' + student.name + '</div>';
+        html += '<div class="student-weakness-number">' + student.attendanceNumber + '</div>';
+        html += '</div>';
+        
+        // 약점 과목
+        html += '<div class="student-weakness-subject">';
+        html += '<span class="student-weakness-subject-icon">' + icon + '</span>';
+        html += '<span>' + displaySubject + '</span>';
+        html += '</div>';
+        
+        // 통계
+        html += '<div class="student-weakness-stats">';
+        
+        html += '<div class="student-weakness-stat">';
+        html += '<span class="student-weakness-label">과목 성취도</span>';
+        html += '<span class="student-weakness-value low">' + student.subjectAverage + '%</span>';
+        html += '</div>';
+        
+        html += '<div class="student-weakness-stat">';
+        html += '<span class="student-weakness-label">본인 평균</span>';
+        html += '<span class="student-weakness-value">' + student.studentAverage + '%</span>';
+        html += '</div>';
+        
+        html += '<div class="student-weakness-stat">';
+        html += '<span class="student-weakness-label">차이</span>';
+        html += '<span class="student-weakness-value low">-' + student.difference + '%</span>';
+        html += '</div>';
+        
+        html += '</div>';
+        
+        // 이유
+        html += '<div class="student-weakness-reason">';
+        html += '📊 ' + student.reason;
+        html += '</div>';
+        
+        html += '</div>';
+    });
+    
+    container.innerHTML = html;
+}
+
+// ===== 학생 상세보기 (나중에 확장 가능) =====
+function showStudentDetail(attendanceNumber) {
+    var student = studentData[attendanceNumber];
+    
+    if (!student) return;
+    
+    alert('🎯 ' + student.name + ' (' + attendanceNumber + ') 학생의 상세 분석\n\n' +
+          '본인 평균: ' + Math.round(Object.values(student.subjectAverages).reduce((a, b) => a + b) / Object.keys(student.subjectAverages).length * 10) / 10 + '%\n\n' +
+          '과목별 성취도:\n' + 
+          Object.keys(student.subjectAverages).map(function(subject) {
+              return '  • ' + subject + ': ' + student.subjectAverages[subject] + '%';
+          }).join('\n'));
+}
+
+// ===== 탭 전환 함수 =====
+function showTab(tabName) {
+    // 모든 탭 버튼 비활성화
+    var buttons = document.querySelectorAll('.tab-button');
+    buttons.forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+    
+    // 클릭한 버튼 활성화
+    event.target.classList.add('active');
+    
+    // 모든 컨텐츠 숨기기
+    document.getElementById('subject-analysis').style.display = 'none';
+    document.getElementById('student-analysis').style.display = 'none';
+    
+    // 선택한 탭 표시
+    if (tabName === 'subject') {
+        document.getElementById('subject-analysis').style.display = 'block';
+    } else if (tabName === 'student') {
+        document.getElementById('student-analysis').style.display = 'block';
+        displayStudentWeakness();  // 학생별 약점 표시
+    }
+}
+    
+
 
 // 통계 대시보드 표시
 function displayStatsDashboard() {
@@ -783,22 +1315,31 @@ function displaySubjectAnalysis() {
         html += '<div class="student-list">';
         
         students.forEach(function(student) {
-            html += '<div class="student-item">';
-            html += '<div class="student-name">';
-            html += student.name + ' (' + student.attendanceNumber + ')';
-            html += '</div>';
-            html += '<div class="student-score">';
-            html += '과목 성취도: <strong>' + student.subjectAverage + '%</strong>';
-            html += '</div>';
-            html += '<div class="student-score">';
-            html += '본인 평균: <strong>' + student.studentAverage + '%</strong>';
-            html += '</div>';
-            html += '<div class="student-score">';
-            html += '<span class="weak-indicator">-' + student.difference + '%</span>';
-            html += ' 본인 평균 대비';
-            html += '</div>';
-            html += '</div>';
-        });
+    // ⭐ 우선순위별 색상 ⭐
+    var priorityColor = student.priority === 'high' ? '#ef4444' : 
+                       student.priority === 'medium' ? '#f59e0b' : '#84cc16';
+    var priorityIcon = student.priority === 'high' ? '🔴' : 
+                       student.priority === 'medium' ? '🟡' : '🟢';
+    
+    html += '<div class="student-item" style="border-left: 4px solid ' + priorityColor + ';">';
+    html += '<div class="student-name">';
+    html += priorityIcon + ' ' + student.name + ' (' + student.attendanceNumber + ')';
+    html += '</div>';
+    html += '<div class="student-score">';
+    html += '과목 성취도: <strong>' + student.subjectAverage + '%</strong>';
+    html += '</div>';
+    html += '<div class="student-score">';
+    html += '본인 평균: <strong>' + student.studentAverage + '%</strong>';
+    html += '</div>';
+    html += '<div class="student-score">';
+    html += '<span class="weak-indicator" style="background: ' + priorityColor + ';">-' + student.difference + '%</span>';
+    html += ' 본인 평균 대비';
+    html += '</div>';
+    html += '<div class="student-score" style="font-size: 0.85em; color: #666; margin-top: 4px;">';
+    html += '📊 ' + student.reason;
+    html += '</div>';
+    html += '</div>';
+});
         
         html += '</div>';
         html += '</div>';
@@ -880,76 +1421,7 @@ function downloadExcel() {
     console.log('엑셀 다운로드 완료:', filename);
 }
 
-        function displaySubjectAnalysis() {
-    var subjectAnalysis = document.getElementById('subjectAnalysis');
-    
-    var html = '';
-    
-    // 다운로드 버튼 추가
-    html += '<div style="text-align: center; margin-bottom: 30px;">';
-    html += '<button class="upload-btn" onclick="downloadExcel()" style="background: linear-gradient(45deg, #10b981, #059669);">';
-    html += '📥 엑셀로 다운로드';
-    html += '</button>';
-    html += '</div>';
-    
-    // 과목 순서 및 아이콘
-    var subjectInfo = [
-        { name: '독서(인문,독서론)', icon: '📖', color: '#667eea' },
-        { name: '독서(사회)', icon: '🏛️', color: '#3b82f6' },
-        { name: '독서(과학)', icon: '🔬', color: '#8b5cf6' },
-        { name: '문학(현대시)', icon: '✍️', color: '#ec4899' },
-        { name: '문학(현대소설)', icon: '📕', color: '#f59e0b' },
-        { name: '문학(고전시가)', icon: '🎭', color: '#10b981' },
-        { name: '문학(고전소설)', icon: '📜', color: '#06b6d4' },
-        { name: '언어화법', icon: '💬', color: '#84cc16' },
-        { name: '매체작문', icon: '✏️', color: '#f43f5e' }
-    ];
-    
-    subjectInfo.forEach(function(info) {
-        var subject = info.name;
-        var students = weaknessAnalysis[subject] || [];
-        
-        if (students.length === 0) return;
-        
-        html += '<div class="subject-card">';
-        html += '<h2 style="color: ' + info.color + ';">';
-        html += info.icon + ' ' + subject + ' 취약 학생';
-        html += '<span style="font-size: 0.8em; margin-left: 10px; color: #ef4444;">(' + students.length + '명)</span>';
-        html += '</h2>';
-        
-        html += '<div class="student-list">';
-        
-        students.forEach(function(student) {
-            html += '<div class="student-item">';
-            html += '<div class="student-name">';
-            html += student.name + ' (' + student.attendanceNumber + ')';
-            html += '</div>';
-            html += '<div class="student-score">';
-            html += '과목 평균: <strong>' + student.subjectAverage + '점</strong>';
-            html += '</div>';
-            html += '<div class="student-score">';
-            html += '본인 평균: <strong>' + student.studentAverage + '점</strong>';
-            html += '</div>';
-            html += '<div class="student-score">';
-            html += '<span class="weak-indicator">-' + student.difference + '점</span>';
-            html += ' 본인 평균 대비';
-            html += '</div>';
-            html += '</div>';
-        });
-        
-        html += '</div>';
-        html += '</div>';
-    });
-    
-    if (html === '<div style="text-align: center; margin-bottom: 30px;"><button class="upload-btn" onclick="downloadExcel()" style="background: linear-gradient(45deg, #10b981, #059669);">📥 엑셀로 다운로드</button></div>') {
-        html += '<div class="subject-card" style="text-align: center; padding: 60px;">';
-        html += '<h2 style="color: #10b981;">🎉 모든 학생이 고르게 잘하고 있습니다!</h2>';
-        html += '<p style="color: #666; margin-top: 15px;">본인 평균 대비 5점 이상 낮은 과목이 없습니다.</p>';
-        html += '</div>';
-    }
-    
-    subjectAnalysis.innerHTML = html;
-}
+
 
          </script>
 </body>
