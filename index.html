@@ -417,6 +417,7 @@
         // 전역 변수
         var studentData = {};
         var weaknessAnalysis = {};
+        var studentMaxWeakness = [];  // ⬅️ 추가!
         
         // 파일 업로드 이벤트
         var uploadArea = document.getElementById('uploadArea');
@@ -1094,7 +1095,7 @@ function analyzeStudentMaxWeakness() {
 function displayStudentWeakness() {
     console.log('=== 학생별 약점 표시 시작 ===');
     
-    var studentMaxWeakness = analyzeStudentMaxWeakness();
+    studentMaxWeakness = analyzeStudentMaxWeakness();  // ⬅️ 전역 변수에 저장
     var container = document.getElementById('studentWeaknessGrid');
     
     if (!container) {
@@ -1108,6 +1109,13 @@ function displayStudentWeakness() {
     }
     
     var html = '';
+    
+    // ⭐ 다운로드 버튼 추가 ⭐
+    html += '<div style="text-align: center; margin-bottom: 30px; grid-column: 1 / -1;">';
+    html += '<button class="upload-btn" onclick="downloadStudentExcel()" style="background: linear-gradient(45deg, #10b981, #059669);">';
+    html += '📥 학생별 약점 엑셀 다운로드';
+    html += '</button>';
+    html += '</div>';
     
     // 과목별 아이콘 매핑
     var subjectIcons = {
@@ -1474,6 +1482,137 @@ function downloadExcel() {
     console.log('엑셀 다운로드 완료:', filename);
 }
 
+        // ===== 학생별 최대약점 엑셀 다운로드 =====
+function downloadStudentExcel() {
+    console.log('학생별 약점 엑셀 다운로드 시작');
+    
+    var studentMaxWeakness = analyzeStudentMaxWeakness();
+    
+    // ⭐ 전역 변수 사용 (재계산 불필요) ⭐
+    if (!studentMaxWeakness || studentMaxWeakness.length === 0) {
+        alert('다운로드할 데이터가 없습니다. 먼저 "학생별 최대약점" 탭을 확인해주세요.');
+        return;
+    }
+    
+    var wb = XLSX.utils.book_new();
+    
+    // 1. 학생별 최대약점 시트
+    var studentData = [
+        ['우선순위', '이름', '출결번호', '최대약점 과목', '과목 성취도(%)', '본인 평균(%)', '차이(%)', 'Z-Score', '약점 사유']
+    ];
+    
+    studentMaxWeakness.forEach(function(student) {
+        var priorityText = student.priority === 'high' ? '🔴 긴급' : 
+                          student.priority === 'medium' ? '🟡 주의' : '🟢 일반';
+        
+        studentData.push([
+            priorityText,
+            student.name,
+            student.attendanceNumber,
+            student.subject,
+            student.subjectAverage,
+            student.studentAverage,
+            student.difference,
+            student.avgZScore,
+            student.reason
+        ]);
+    });
+    
+    var ws = XLSX.utils.aoa_to_sheet(studentData);
+    
+    // 열 너비 설정
+    ws['!cols'] = [
+        {wch: 10},  // 우선순위
+        {wch: 10},  // 이름
+        {wch: 10},  // 출결번호
+        {wch: 20},  // 최대약점 과목
+        {wch: 15},  // 과목 성취도
+        {wch: 15},  // 본인 평균
+        {wch: 10},  // 차이
+        {wch: 10},  // Z-Score
+        {wch: 30}   // 약점 사유
+    ];
+    
+    XLSX.utils.book_append_sheet(wb, ws, '학생별최대약점');
+    
+    // 2. 우선순위별 통계 시트
+    var highCount = studentMaxWeakness.filter(s => s.priority === 'high').length;
+    var mediumCount = studentMaxWeakness.filter(s => s.priority === 'medium').length;
+    var lowCount = studentMaxWeakness.filter(s => s.priority === 'low').length;
+    
+    var statsData = [
+        ['우선순위', '학생 수', '비율(%)'],
+        ['🔴 긴급 (High)', highCount, Math.round((highCount / studentMaxWeakness.length) * 100)],
+        ['🟡 주의 (Medium)', mediumCount, Math.round((mediumCount / studentMaxWeakness.length) * 100)],
+        ['🟢 일반 (Low)', lowCount, Math.round((lowCount / studentMaxWeakness.length) * 100)],
+        ['전체', studentMaxWeakness.length, 100]
+    ];
+    
+    var statsWs = XLSX.utils.aoa_to_sheet(statsData);
+    XLSX.utils.book_append_sheet(wb, statsWs, '우선순위별통계');
+    
+    // 3. 과목별 학생 수 통계 시트
+    var subjectCount = {};
+    
+    studentMaxWeakness.forEach(function(student) {
+        if (!subjectCount[student.subject]) {
+            subjectCount[student.subject] = 0;
+        }
+        subjectCount[student.subject]++;
+    });
+    
+    var subjectStatsData = [
+        ['과목', '최대약점 학생 수']
+    ];
+    
+    // 과목별 정렬 (학생 수 많은 순)
+    var sortedSubjects = Object.keys(subjectCount).sort(function(a, b) {
+        return subjectCount[b] - subjectCount[a];
+    });
+    
+    sortedSubjects.forEach(function(subject) {
+        subjectStatsData.push([subject, subjectCount[subject]]);
+    });
+    
+    var subjectStatsWs = XLSX.utils.aoa_to_sheet(subjectStatsData);
+    XLSX.utils.book_append_sheet(wb, subjectStatsWs, '과목별통계');
+    
+    // 4. 긴급 학생 리스트 (High priority만)
+    var urgentStudents = studentMaxWeakness.filter(s => s.priority === 'high');
+    
+    if (urgentStudents.length > 0) {
+        var urgentData = [
+            ['이름', '출결번호', '최대약점 과목', '과목 성취도(%)', '본인 평균(%)', '차이(%)', '약점 사유']
+        ];
+        
+        urgentStudents.forEach(function(student) {
+            urgentData.push([
+                student.name,
+                student.attendanceNumber,
+                student.subject,
+                student.subjectAverage,
+                student.studentAverage,
+                student.difference,
+                student.reason
+            ]);
+        });
+        
+        var urgentWs = XLSX.utils.aoa_to_sheet(urgentData);
+        XLSX.utils.book_append_sheet(wb, urgentWs, '🔴긴급학생');
+    }
+    
+    // 파일 다운로드
+    var today = new Date();
+    var filename = '학생별최대약점분석_' + 
+                   today.getFullYear() + 
+                   ('0' + (today.getMonth() + 1)).slice(-2) + 
+                   ('0' + today.getDate()).slice(-2) + 
+                   '.xlsx';
+    
+    XLSX.writeFile(wb, filename);
+    
+    console.log('학생별 약점 엑셀 다운로드 완료:', filename);
+}
 
 
          </script>
