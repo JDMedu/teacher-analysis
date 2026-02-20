@@ -534,6 +534,13 @@ function analyzeWeaknesses() {
         weaknessAnalysis[subject] = [];
     });
     
+    // ⭐ 첫 번째 학생의 과목 목록 출력 ⭐
+    var firstStudentKey = Object.keys(studentData)[0];
+    if (firstStudentKey) {
+        var firstStudent = studentData[firstStudentKey];
+        console.log('첫 번째 학생 과목 목록:', Object.keys(firstStudent.subjectAverages));
+    }
+    
     // 각 학생 분석
     for (var attendanceNumber in studentData) {
         var student = studentData[attendanceNumber];
@@ -557,9 +564,9 @@ function analyzeWeaknesses() {
             var subjectAverage = student.subjectAverages[actualSubject];
             var difference = studentAverage - subjectAverage;
             
-            // 본인 평균보다 5점 이상 낮으면 약점으로 판정
-            if (difference >= 5) {
-                // ⭐ 기존 코드의 매핑 로직 활용 ⭐
+            // 본인 평균보다 10% 이상 낮으면 약점으로 판정
+            if (difference >= 10) {
+                // 과목명 매칭
                 var matchedSubject = findMatchingSubjectAdvanced(actualSubject, subjects);
                 
                 if (matchedSubject && weaknessAnalysis[matchedSubject]) {
@@ -570,8 +577,6 @@ function analyzeWeaknesses() {
                         studentAverage: Math.round(studentAverage * 10) / 10,
                         difference: Math.round(difference * 10) / 10
                     });
-                    
-                    console.log('약점 발견:', student.name, actualSubject, '→', matchedSubject);
                 }
             }
         }
@@ -584,7 +589,6 @@ function analyzeWeaknesses() {
         });
     }
     
-    // 결과 출력
     console.log('=== 과목별 약점 학생 수 ===');
     for (var subject in weaknessAnalysis) {
         if (weaknessAnalysis[subject].length > 0) {
