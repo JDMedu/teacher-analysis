@@ -290,144 +290,193 @@
         });
 
 
-        // 파일 처리 함수
+       // 파일 처리 함수
 function processFile(file) {
     console.log('파일 처리 시작:', file.name);
-    
-    // 로딩 표시
-    document.getElementById('loading').style.display = 'block';
-    document.getElementById('analysisSection').style.display = 'none';
     
     var reader = new FileReader();
     reader.onload = function(e) {
         try {
+            console.log('엑셀 파일 로드 시작');
             var data = new Uint8Array(e.target.result);
             var workbook = XLSX.read(data, {type: 'array'});
             
             console.log('엑셀 파일 로드 완료');
             console.log('시트 목록:', workbook.SheetNames);
             
-            // 데이터 파싱
+            // ⭐ 1단계: 학생 데이터 파싱 ⭐
             parseStudentData(workbook);
             
-            // 약점 분석
+            // ⭐ 2단계: 약점 분석 ⭐
             analyzeWeaknesses();
             
-            // 결과 표시
+            // ⭐ 3단계: 결과 표시 ⭐
             displayResults();
             
-            // 로딩 숨기기
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('analysisSection').style.display = 'block';
-            
         } catch (error) {
+            console.error('파일 처리 오류:', error);
             alert('파일 처리 중 오류가 발생했습니다: ' + error.message);
-            console.error('오류:', error);
-            document.getElementById('loading').style.display = 'none';
         }
     };
     
     reader.readAsArrayBuffer(file);
 }
 
-// 학생 데이터 파싱
+// 학생 데이터 파싱 함수
 function parseStudentData(workbook) {
-    studentData = {};
-    
     console.log('=== 학생 데이터 파싱 시작 ===');
     
-    // 1. 출결번호-이름 매핑 (2번째 시트)
-    var attendanceToNameMap = {};
-    var mappingSheetName = workbook.SheetNames[1];
+    studentData = {};
     
-    if (workbook.Sheets[mappingSheetName]) {
-        var mappingSheet = workbook.Sheets[mappingSheetName];
-        var mappingData = XLSX.utils.sheet_to_json(mappingSheet, {header: 1});
-        
-        for (var i = 1; i < mappingData.length; i++) {
-            var row = mappingData[i];
-            if (row && row[0] && row[1]) {
-                var name = row[0];
-                var attendanceNumber = row[1];
-                attendanceToNameMap[attendanceNumber] = name;
-                
-                // 학생 데이터 초기화
-                studentData[attendanceNumber] = {
-                    name: name,
-                    attendanceNumber: attendanceNumber,
-                    testScores: {},  // 시험별 과목 점수
-                    subjectAverages: {}  // 과목별 평균
-                };
-            }
+    // 2번째 시트: 출결번호-이름 매핑
+    var mappingSheetName = workbook.SheetNames[1];
+    var mappingSheet = workbook.Sheets[mappingSheetName];
+    var mappingData = XLSX.utils.sheet_to_json(mappingSheet, {header: 1});
+    
+    var attendanceToNameMap = {};
+    
+    for (var i = 1; i < mappingData.length; i++) {
+        var row = mappingData[i];
+        if (row && row[0] && row[1]) {
+            var name = row[0];
+            var attendanceNumber = String(row[1]);
+            attendanceToNameMap[attendanceNumber] = name;
+            
+            studentData[attendanceNumber] = {
+                name: name,
+                attendanceNumber: attendanceNumber,
+                testScores: {},
+                subjectAverages: {}
+            };
         }
     }
     
     console.log('매핑된 학생 수:', Object.keys(attendanceToNameMap).length);
     
-    // 2. 모클 시트들에서 성적 데이터 추출
-    var allSheetNames = workbook.SheetNames;
-    var testSheetNames = [];
+    // 시험 시트 찾기
+    var allSheets = workbook.SheetNames;
+    var testSheets = [];
     
-    for (var i = 0; i < allSheetNames.length; i++) {
-        var sheetName = allSheetNames[i];
-        if ((sheetName.includes('모클') || sheetName.includes('이감') || sheetName.includes('진단평가')) && 
+    for (var i = 0; i < allSheets.length; i++) {
+        var sheetName = allSheets[i];
+        if ((sheetName.includes('모클') || sheetName.includes('이감') || sheetName.includes('진단평가')) &&
             !sheetName.includes('성적표') && sheetName !== '등급컷' && sheetName !== '출결번호') {
-            testSheetNames.push(sheetName);
+            testSheets.push(sheetName);
         }
     }
     
-    console.log('발견된 시험 시트:', testSheetNames);
+    console.log('발견된 시험 시트:', testSheets);
     
-    // 3. 최근 10회 시험만 선택
-    var recentTests = testSheetNames.slice(-10);
+    // 최근 10회만 선택
+    var recentTests = testSheets.slice(-10);
     console.log('최근 10회 시험:', recentTests);
     
-    // 4. 각 시험 시트에서 데이터 추출
-    for (var s = 0; s < recentTests.length; s++) {
-        var sheetName = recentTests[s];
-        if (!workbook.Sheets[sheetName]) continue;
+    // ⭐ 각 시험 처리 ⭐
+    recentTests.forEach(function(testName) {
+        console.log('\n처리 중:', testName);
         
-        var worksheet = workbook.Sheets[sheetName];
-        var jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+        var sheet = workbook.Sheets[testName];
+        var data = XLSX.utils.sheet_to_json(sheet, {header: 1});
         
-        if (jsonData.length <= 1) continue;
+        if (data.length < 2) return;
         
-        var headers = jsonData[0];
-        console.log('\n처리 중:', sheetName);
+        var headers = data[0];
         
-        // 각 학생 데이터 처리
-        for (var i = 1; i < jsonData.length; i++) {
-            var row = jsonData[i];
-            if (!row || !row[0]) continue;
+        // ⭐ 2274 이대건과 2284 오진형의 데이터 찾기 ⭐
+        var 이대건Row = null;
+        var 오진형Row = null;
+        
+        for (var i = 1; i < data.length; i++) {
+            var row = data[i];
+            if (!row || !row[1]) continue;
+            
+            var attendanceNumber = String(row[1]);
+            
+            if (attendanceNumber === '2274') {
+                이대건Row = row;
+                console.log('✅ 이대건 발견 (언어와매체 만점)');
+            }
+            if (attendanceNumber === '2284') {
+                오진형Row = row;
+                console.log('✅ 오진형 발견 (화법과작문 만점)');
+            }
+        }
+        
+        if (!이대건Row || !오진형Row) {
+            console.warn('⚠️ 만점 학생 데이터 부족:', testName);
+            return;
+        }
+        
+        // ⭐ 만점 데이터 저장 ⭐
+        var maxScores = {
+            '언어와매체': {},
+            '화법과작문': {}
+        };
+        
+        // 이대건 = 언어와매체 만점
+        for (var col = 5; col < headers.length; col++) {
+            var subjectName = normalizeHeader(headers[col]);
+            var score = parseFloat(이대건Row[col]) || 0;
+            if (score > 0) {
+                maxScores['언어와매체'][subjectName] = score;
+            }
+        }
+        
+        // 오진형 = 화법과작문 만점
+        for (var col = 5; col < headers.length; col++) {
+            var subjectName = normalizeHeader(headers[col]);
+            var score = parseFloat(오진형Row[col]) || 0;
+            if (score > 0) {
+                maxScores['화법과작문'][subjectName] = score;
+            }
+        }
+        
+        console.log(testName + ' 만점 기준:', maxScores);
+        
+        // ⭐ 각 학생의 성취도(%) 계산 ⭐
+        for (var i = 1; i < data.length; i++) {
+            var row = data[i];
+            if (!row || !row[0] || !row[1]) continue;
             
             var name = row[0];
-            var attendanceNumber = row[1];
+            var attendanceNumber = String(row[1]);
+            var subjectType = row[2] || '화법과 작문';
             
             if (!studentData[attendanceNumber]) continue;
             
-            // 시험별 과목 점수 저장 (5열부터)
-            var testScores = {};
+            // 선택과목에 맞는 만점 선택
+            var track = getTrack(subjectType);
+            var maxScoreData = maxScores[track];
             
-            for (var j = 5; j < Math.min(headers.length, row.length); j++) {
-                var subject = normalizeHeader(headers[j]);
-                var score = row[j];
+            // 과목별 성취도(%) 계산
+            var subjectRatios = {};
+            
+            for (var col = 5; col < headers.length; col++) {
+                var subjectName = normalizeHeader(headers[col]);
+                var studentScore = parseFloat(row[col]) || 0;
+                var maxScore = maxScoreData[subjectName] || 0;
                 
-                if (subject && score !== null && score !== undefined && score !== '') {
-                    testScores[subject] = parseFloat(score);
+                if (maxScore > 0 && studentScore >= 0) {
+                    var ratio = Math.round((studentScore / maxScore) * 100);
+                    subjectRatios[subjectName] = ratio;
+                    
+                    // 첫 번째 학생만 로그
+                    if (i === 1) {
+                        console.log(name + ' - ' + subjectName + ':', studentScore + '/' + maxScore + ' = ' + ratio + '%');
+                    }
                 }
             }
             
-            studentData[attendanceNumber].testScores[sheetName] = testScores;
+            studentData[attendanceNumber].testScores[testName] = subjectRatios;
         }
-    }
+    });
     
-    // 5. 각 학생의 과목별 평균 계산
+    // ⭐ 각 학생의 과목별 평균 성취도(%) 계산 ⭐
     for (var attendanceNumber in studentData) {
         var student = studentData[attendanceNumber];
         var subjectTotals = {};
         var subjectCounts = {};
         
-        // 모든 시험의 과목 점수 합산
         for (var testName in student.testScores) {
             var testScores = student.testScores[testName];
             
@@ -442,22 +491,32 @@ function parseStudentData(workbook) {
             }
         }
         
-        // 평균 계산
         for (var subject in subjectTotals) {
-            student.subjectAverages[subject] = subjectTotals[subject] / subjectCounts[subject];
+            student.subjectAverages[subject] = Math.round((subjectTotals[subject] / subjectCounts[subject]) * 10) / 10;
+        }
+        
+        // 첫 번째 학생만 로그
+        if (attendanceNumber === Object.keys(studentData)[0]) {
+            console.log('📊 ' + student.name + ' 과목별 평균 성취도:', student.subjectAverages);
         }
     }
     
     console.log('파싱 완료. 학생 수:', Object.keys(studentData).length);
 }
 
-// 헤더 정규화 함수
-function normalizeHeader(header) {
-    if (!header) return '';
-    return String(header).replace(/\s/g, '').trim();
+// 선택과목 구분 함수
+function getTrack(subjectTypeCell) {
+    var v = (subjectTypeCell || '').toString().replace(/\s/g, '');
+    if (v.includes('언어') || v.includes('매체')) return '언어와매체';
+    return '화법과작문';
 }
 
-        // 약점 분석 함수
+// 헤더 정규화 함수
+function normalizeHeader(h) {
+    return String(h == null ? '' : h).replace(/\s/g, '').trim();
+}
+
+       // 약점 분석 함수
 function analyzeWeaknesses() {
     weaknessAnalysis = {};
     
@@ -472,8 +531,8 @@ function analyzeWeaknesses() {
         '문학(현대소설)',
         '문학(고전시가)',
         '문학(고전소설)',
-        '언어화법',
-        '매체작문'
+        '언어 화법',
+        '매체 작문'
     ];
     
     // 각 과목별로 초기화
@@ -500,14 +559,14 @@ function analyzeWeaknesses() {
         var studentAverage = totalSum / totalCount;
         
         // 각 과목이 평균보다 낮은지 확인
-        for (var subject in student.subjectAverages) {
-            var subjectAverage = student.subjectAverages[subject];
+        for (var actualSubject in student.subjectAverages) {
+            var subjectAverage = student.subjectAverages[actualSubject];
             var difference = studentAverage - subjectAverage;
             
             // 본인 평균보다 5점 이상 낮으면 약점으로 판정
             if (difference >= 5) {
-                // 과목명 매칭
-                var matchedSubject = findMatchingSubject(subject, subjects);
+                // ⭐ 기존 코드의 매핑 로직 활용 ⭐
+                var matchedSubject = findMatchingSubjectAdvanced(actualSubject, subjects);
                 
                 if (matchedSubject && weaknessAnalysis[matchedSubject]) {
                     weaknessAnalysis[matchedSubject].push({
@@ -517,6 +576,8 @@ function analyzeWeaknesses() {
                         studentAverage: Math.round(studentAverage * 10) / 10,
                         difference: Math.round(difference * 10) / 10
                     });
+                    
+                    console.log('약점 발견:', student.name, actualSubject, '→', matchedSubject);
                 }
             }
         }
@@ -529,35 +590,55 @@ function analyzeWeaknesses() {
         });
     }
     
+    // 결과 출력
+    console.log('=== 과목별 약점 학생 수 ===');
+    for (var subject in weaknessAnalysis) {
+        if (weaknessAnalysis[subject].length > 0) {
+            console.log(subject + ':', weaknessAnalysis[subject].length + '명');
+        }
+    }
+    
     console.log('약점 분석 완료:', weaknessAnalysis);
 }
 
-// 과목명 매칭 함수
-function findMatchingSubject(actualSubject, standardSubjects) {
+// ⭐ 기존 코드의 고급 매칭 로직 ⭐
+function findMatchingSubjectAdvanced(actualSubject, standardSubjects) {
+    // 과목명 매핑 (기존 코드에서 가져옴)
     var subjectMapping = {
-        '독서(인문,독서론)': ['독서(인문,독서론)', '독서(인문이론)', '독서인문', '인문'],
+        '독서(인문,독서론)': ['독서(인문,독서론)', '독서(인문 이론)', '독서(인문이론)', '독서인문', '인문'],
         '독서(사회)': ['독서(사회)', '독서사회', '사회'],
         '독서(과학)': ['독서(과학)', '독서과학', '과학'],
         '문학(현대시)': ['문학(현대시)', '문학현대시', '현대시', '현시'],
         '문학(현대소설)': ['문학(현대소설)', '문학현대소설', '현대소설', '현소'],
         '문학(고전시가)': ['문학(고전시가)', '문학고전시가', '고전시가', '고시'],
         '문학(고전소설)': ['문학(고전소설)', '문학고전소설', '고전소설', '고소'],
-        '언어화법': ['언어화법', '언어 화법', '화법'],
-        '매체작문': ['매체작문', '매체 작문', '작문']
+        '언어 화법': ['언어 화법', '언어화법', '화법'],
+        '매체 작문': ['매체 작문', '매체작문', '작문']
     };
     
+    // 1. 정확히 일치하는 과목 찾기
     for (var standardSubject in subjectMapping) {
-        var aliases = subjectMapping[standardSubject];
+        var possibleNames = subjectMapping[standardSubject];
         
-        for (var i = 0; i < aliases.length; i++) {
-            if (actualSubject === aliases[i] || 
-                actualSubject.includes(aliases[i]) || 
-                aliases[i].includes(actualSubject)) {
+        for (var i = 0; i < possibleNames.length; i++) {
+            if (actualSubject === possibleNames[i]) {
                 return standardSubject;
             }
         }
     }
     
+    // 2. 부분 일치하는 과목 찾기
+    for (var standardSubject in subjectMapping) {
+        var possibleNames = subjectMapping[standardSubject];
+        
+        for (var i = 0; i < possibleNames.length; i++) {
+            if (actualSubject.includes(possibleNames[i]) || possibleNames[i].includes(actualSubject)) {
+                return standardSubject;
+            }
+        }
+    }
+    
+    console.log('⚠️ 매칭 실패:', actualSubject);
     return null;
 }
 
