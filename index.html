@@ -1314,32 +1314,32 @@ function displaySubjectAnalysis() {
         
         html += '<div class="student-list">';
         
-        students.forEach(function(student) {
-    // ⭐ 우선순위별 색상 ⭐
-    var priorityColor = student.priority === 'high' ? '#ef4444' : 
-                       student.priority === 'medium' ? '#f59e0b' : '#84cc16';
-    var priorityIcon = student.priority === 'high' ? '🔴' : 
-                       student.priority === 'medium' ? '🟡' : '🟢';
-    
-    html += '<div class="student-item" style="border-left: 4px solid ' + priorityColor + ';">';
-    html += '<div class="student-name">';
-    html += priorityIcon + ' ' + student.name + ' (' + student.attendanceNumber + ')';
-    html += '</div>';
-    html += '<div class="student-score">';
-    html += '과목 성취도: <strong>' + student.subjectAverage + '%</strong>';
-    html += '</div>';
-    html += '<div class="student-score">';
-    html += '본인 평균: <strong>' + student.studentAverage + '%</strong>';
-    html += '</div>';
-    html += '<div class="student-score">';
-    html += '<span class="weak-indicator" style="background: ' + priorityColor + ';">-' + student.difference + '%</span>';
-    html += ' 본인 평균 대비';
-    html += '</div>';
-    html += '<div class="student-score" style="font-size: 0.85em; color: #666; margin-top: 4px;">';
-    html += '📊 ' + student.reason;
-    html += '</div>';
-    html += '</div>';
-});
+       students.forEach(function(student) {
+            // ⭐ 우선순위별 색상 ⭐
+            var priorityColor = student.priority === 'high' ? '#ef4444' : 
+                               student.priority === 'medium' ? '#f59e0b' : '#84cc16';
+            var priorityIcon = student.priority === 'high' ? '🔴' : 
+                               student.priority === 'medium' ? '🟡' : '🟢';
+            
+            html += '<div class="student-item" style="border-left: 4px solid ' + priorityColor + ';">';
+            html += '<div class="student-name">';
+            html += priorityIcon + ' ' + student.name + ' (' + student.attendanceNumber + ')';
+            html += '</div>';
+            html += '<div class="student-score">';
+            html += '과목 성취도: <strong>' + student.subjectAverage + '%</strong>';
+            html += '</div>';
+            html += '<div class="student-score">';
+            html += '본인 평균: <strong>' + student.studentAverage + '%</strong>';
+            html += '</div>';
+            html += '<div class="student-score">';
+            html += '<span class="weak-indicator" style="background: ' + priorityColor + ';">-' + student.difference + '%</span>';
+            html += ' 본인 평균 대비';
+            html += '</div>';
+            html += '<div class="student-score" style="font-size: 0.85em; color: #666; margin-top: 4px;">';
+            html += '📊 ' + student.reason;
+            html += '</div>';
+            html += '</div>';
+        });  // ⬅️ forEach 끝!
         
         html += '</div>';
         html += '</div>';
