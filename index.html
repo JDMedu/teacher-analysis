@@ -731,7 +731,7 @@ function displaySubjectAnalysis() {
     html += '</button>';
     html += '</div>';
     
-    // 과목 순서 및 아이콘
+    // ⭐ 과목 순서 및 아이콘 (공백 제거한 버전도 체크) ⭐
     var subjectInfo = [
         { name: '독서(인문,독서론)', icon: '📖', color: '#667eea' },
         { name: '독서(사회)', icon: '🏛️', color: '#3b82f6' },
@@ -748,9 +748,29 @@ function displaySubjectAnalysis() {
     
     subjectInfo.forEach(function(info) {
         var subject = info.name;
-        var students = weaknessAnalysis[subject] || [];
         
-        if (students.length === 0) return;
+        // ⭐ weaknessAnalysis에서 직접 찾기 (공백 무시) ⭐
+        var students = null;
+        
+        // 1. 정확한 이름으로 찾기
+        if (weaknessAnalysis[subject]) {
+            students = weaknessAnalysis[subject];
+            console.log('✅ 정확 매칭:', subject, students.length + '명');
+        } 
+        // 2. 공백 제거한 이름으로 찾기
+        else {
+            var subjectNoSpace = subject.replace(/\s/g, '');
+            for (var key in weaknessAnalysis) {
+                var keyNoSpace = key.replace(/\s/g, '');
+                if (keyNoSpace === subjectNoSpace) {
+                    students = weaknessAnalysis[key];
+                    console.log('✅ 공백제거 매칭:', subject, '←', key, students.length + '명');
+                    break;
+                }
+            }
+        }
+        
+        if (!students || students.length === 0) return;
         
         hasContent = true;
         
